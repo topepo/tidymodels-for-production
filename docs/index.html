@@ -221,17 +221,9 @@ Max Kuhn and Emil Hvitfeldt
 <li>Post-Deployment</li>
 </ul>
 </section>
-<section id="ingesting-data" class="slide level2">
-<h2>Ingesting Data</h2>
-<p>We often get our data in some markup format (e.g., cvs, json, etc.) that may not have the right context compared to the original training/testing data.</p>
-<ul>
-<li>How to map categories to indicators.</li>
-<li>Timezone for dates (compared to the original data)</li>
-</ul>
-<p>How does R (and tidymodels) deal with this?</p>
-</section>
-<section id="some-example-data" class="slide level2">
-<h2>Some example data</h2>
+<section id="example-data" class="slide level2">
+<h2>Example data</h2>
+<p>Data on <a href="https://bookdown.org/max/FES/chicago-intro.html">daily ridership</a> on the Chicago “L” trains:</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href=""></a><span class="fu">library</span>(lubridate)</span>
 <span id="cb1-2"><a href=""></a></span>
@@ -250,36 +242,57 @@ Max Kuhn and Emil Hvitfeldt
 <span id="cb1-15"><a href=""></a><span class="co"># 605 rows</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
-<section id="data-consistency" class="slide level2">
-<h2>Data Consistency</h2>
+<section id="two-example-models" class="slide level2">
+<h2>Two example models</h2>
+<p>Here are two models (a single decision tree and a boosted decision tree) that we’ll use:</p>
+<p><br></p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href=""></a>ptype <span class="ot">&lt;-</span> chicago_original[<span class="dv">0</span>,]</span>
-<span id="cb2-2"><a href=""></a><span class="fu">str</span>(ptype)</span>
-<span id="cb2-3"><a href=""></a><span class="co">#&gt; tibble [0 × 7] (S3: tbl_df/tbl/data.frame)</span></span>
-<span id="cb2-4"><a href=""></a><span class="co">#&gt;  $ ridership       : num(0) </span></span>
-<span id="cb2-5"><a href=""></a><span class="co">#&gt;  $ date            : 'Date' num(0) </span></span>
-<span id="cb2-6"><a href=""></a><span class="co">#&gt;  $ day             : Ord.factor w/ 7 levels "Sun"&lt;"Mon"&lt;"Tue"&lt;..: </span></span>
-<span id="cb2-7"><a href=""></a><span class="co">#&gt;  $ Clark_Lake      : num(0) </span></span>
-<span id="cb2-8"><a href=""></a><span class="co">#&gt;  $ Clinton         : num(0) </span></span>
-<span id="cb2-9"><a href=""></a><span class="co">#&gt;  $ Merchandise_Mart: num(0) </span></span>
-<span id="cb2-10"><a href=""></a><span class="co">#&gt;  $ Irving_Park     : num(0)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href=""></a><span class="fu">library</span>(tidymodels)</span>
+<span id="cb2-2"><a href=""></a></span>
+<span id="cb2-3"><a href=""></a><span class="co"># A CART classification tree</span></span>
+<span id="cb2-4"><a href=""></a>cart_wflow <span class="ot">&lt;-</span> <span class="fu">workflow</span>(ridership <span class="sc">~</span> ., <span class="fu">decision_tree</span>(<span class="at">mode =</span> <span class="st">"regression"</span>))</span>
+<span id="cb2-5"><a href=""></a>cart_fit <span class="ot">&lt;-</span> <span class="fu">fit</span>(cart_wflow, chicago_original)</span>
+<span id="cb2-6"><a href=""></a></span>
+<span id="cb2-7"><a href=""></a><span class="co"># An xgboost collection of trees</span></span>
+<span id="cb2-8"><a href=""></a>xgb_wflow <span class="ot">&lt;-</span> <span class="fu">workflow</span>(ridership <span class="sc">~</span> ., <span class="fu">boost_tree</span>(<span class="at">mode =</span> <span class="st">"regression"</span>))</span>
+<span id="cb2-9"><a href=""></a>xgb_fit <span class="ot">&lt;-</span> <span class="fu">fit</span>(xgb_wflow, chicago_original)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
-<section id="simple-example" class="slide level2">
-<h2>Simple Example</h2>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href=""></a><span class="fu">library</span>(tidymodels)</span>
-<span id="cb3-2"><a href=""></a></span>
-<span id="cb3-3"><a href=""></a>cart_wflow <span class="ot">&lt;-</span> <span class="fu">workflow</span>(ridership <span class="sc">~</span> ., <span class="fu">decision_tree</span>(<span class="at">mode =</span> <span class="st">"regression"</span>))</span>
-<span id="cb3-4"><a href=""></a>cart_fit <span class="ot">&lt;-</span> <span class="fu">fit</span>(cart_wflow, chicago_original)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="ingesting-data" class="slide level2">
+<h2>Ingesting Data</h2>
+<p>We often get our data in some markup format (e.g., cvs, json, etc.) that may not have the right context compared to the original training/testing data.</p>
+<ul>
+<li>How to map categories to indicators.</li>
+<li>Timezone for dates (compared to the original data)</li>
+</ul>
+<div class="fragment">
+<p>How does R (and tidymodels) deal with this?</p>
 </div>
+</section>
+<section id="data-consistency" class="slide level2">
+<h2>Data Consistency</h2>
+<p>tidymodels uses a “zero-row slide” of the data to record important aspects of the data:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href=""></a>ptype <span class="ot">&lt;-</span> chicago_original[<span class="dv">0</span>,]</span>
+<span id="cb3-2"><a href=""></a><span class="fu">str</span>(ptype)</span>
+<span id="cb3-3"><a href=""></a><span class="co">#&gt; tibble [0 × 7] (S3: tbl_df/tbl/data.frame)</span></span>
+<span id="cb3-4"><a href=""></a><span class="co">#&gt;  $ ridership       : num(0) </span></span>
+<span id="cb3-5"><a href=""></a><span class="co">#&gt;  $ date            : 'Date' num(0) </span></span>
+<span id="cb3-6"><a href=""></a><span class="co">#&gt;  $ day             : Ord.factor w/ 7 levels "Sun"&lt;"Mon"&lt;"Tue"&lt;..: </span></span>
+<span id="cb3-7"><a href=""></a><span class="co">#&gt;  $ Clark_Lake      : num(0) </span></span>
+<span id="cb3-8"><a href=""></a><span class="co">#&gt;  $ Clinton         : num(0) </span></span>
+<span id="cb3-9"><a href=""></a><span class="co">#&gt;  $ Merchandise_Mart: num(0) </span></span>
+<span id="cb3-10"><a href=""></a><span class="co">#&gt;  $ Irving_Park     : num(0)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><br></p>
+<p>It (and vetiver) will ensure that newly ingested data for prediction are encoded the same way and <a href="https://hardhat.tidymodels.org/reference/scream.html">alert the user otherwise</a>.</p>
 </section>
 <section id="preparing-and-saving-the-model-object" class="slide level2">
 <h2>Preparing and saving the model object</h2>
 <p>There are one or two operations you might want to use on your model object:</p>
 <ul>
-<li><a href="https://butcher.tidymodels.org/"><code>butcher</code></a>: remove ancillary data that are not used for prediction.</li>
-<li><a href="https://rstudio.github.io/bundle/"><code>bundle</code></a>: ensure that <em>all</em> of the model data are captured for production.</li>
+<li><a href="https://butcher.tidymodels.org/">butcher</a>: remove ancillary data that are not used for prediction.</li>
+<li><a href="https://rstudio.github.io/bundle/">bundle</a>: ensure that <em>all</em> of the model data are captured for production.</li>
 </ul>
 </section>
 <section id="saved-model-size" class="slide level2">
@@ -309,32 +322,34 @@ Max Kuhn and Emil Hvitfeldt
 </section>
 <section id="getting-everything-that-defines-the-model" class="slide level2">
 <h2>Getting <em>Everything</em> that Defines the Model</h2>
-<p>There are a few model types that don’t follow traditional behaviors, where the model object does not contain everything that the model needs.</p>
+<p>There are a few model types that don’t follow traditional behavior, in that the model object doesn’t contain everything the model needs.</p>
 <ul>
 <li>Examples: xgboost, lightgbm, catboost, bart, tensorflow, and others</li>
 </ul>
+<div class="fragment">
 <p><br></p>
-<p>In order to productionize these, we need to keep <em>all</em> of the model data in a single object.</p>
+</div>
+<div class="fragment">
+<p>To productionize these, we need to keep <em>all</em> of the model data in a single object.</p>
 <p><br></p>
 <p>That’s what the bundle package does.</p>
+</div>
 </section>
 <section id="boosting-example" class="slide level2">
 <h2>Boosting Example</h2>
-<p>Here’s an example of an xgboost model. It retains the model information in a pointer to external memory:</p>
+<p>Consider our previously fit xgboost model. It retains the model information in a pointer to external memory:</p>
 <p><br></p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href=""></a><span class="fu">library</span>(tidymodels)</span>
-<span id="cb6-2"><a href=""></a></span>
-<span id="cb6-3"><a href=""></a>xgb_wflow <span class="ot">&lt;-</span> <span class="fu">workflow</span>(ridership <span class="sc">~</span> ., <span class="fu">boost_tree</span>(<span class="at">mode =</span> <span class="st">"regression"</span>))</span>
-<span id="cb6-4"><a href=""></a>xgb_fit <span class="ot">&lt;-</span> <span class="fu">fit</span>(xgb_wflow, chicago_original)</span>
-<span id="cb6-5"><a href=""></a>xgb_fit <span class="sc">|&gt;</span> <span class="fu">extract_fit_engine</span>() <span class="sc">|&gt;</span> <span class="fu">pluck</span>(<span class="st">"ptr"</span>)</span>
-<span id="cb6-6"><a href=""></a><span class="co">#&gt; &lt;pointer: 0x128edb970&gt;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href=""></a>xgb_fit <span class="sc">|&gt;</span> <span class="fu">extract_fit_engine</span>() <span class="sc">|&gt;</span> <span class="fu">pluck</span>(<span class="st">"ptr"</span>)</span>
+<span id="cb6-2"><a href=""></a><span class="co">#&gt; &lt;pointer: 0x11724a5d0&gt;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p><br></p>
 <p>Using the usual <code>save()</code> command won’t capture this extra data, so the model won’t work outside of this R session.</p>
 </section>
 <section id="bundling" class="slide level2">
 <h2>Bundling</h2>
+<p>The interface is very simple:</p>
+<p><br></p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href=""></a><span class="fu">library</span>(bundle)</span>
 <span id="cb7-2"><a href=""></a></span>
@@ -344,29 +359,49 @@ Max Kuhn and Emil Hvitfeldt
 <span id="cb7-6"><a href=""></a></span>
 <span id="cb7-7"><a href=""></a>xgb_fit_remade <span class="ot">&lt;-</span> <span class="fu">unbundle</span>(xgb_bund_fit)</span>
 <span id="cb7-8"><a href=""></a>xgb_fit_remade <span class="sc">|&gt;</span> <span class="fu">extract_fit_engine</span>() <span class="sc">|&gt;</span> <span class="fu">pluck</span>(<span class="st">"ptr"</span>)</span>
-<span id="cb7-9"><a href=""></a><span class="co">#&gt; &lt;pointer: 0x10e352cb0&gt;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb7-9"><a href=""></a><span class="co">#&gt; &lt;pointer: 0x120d73ee0&gt;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
+<p>Note that the pointer references a different location in memory than the original object.</p>
+</section></section>
+<section>
+<section id="model-deployment" class="title-slide slide level1 center" data-background-color="#D04E59FF">
+<h1>Model Deployment</h1>
+
 </section>
 <section id="deploying-with-sql" class="slide level2">
 <h2>Deploying with SQL</h2>
 </section>
 <section id="versioning-and-deploying-with-vetiver" class="slide level2">
 <h2>Versioning and Deploying with vetiver</h2>
-<p><a href="https://vetiver.tidymodels.org/"><code>vetiver</code></a></p>
+<p><a href="https://vetiver.tidymodels.org/">vetiver</a> is a tool for deploying models using the well-known <a href="https://en.wikipedia.org/wiki/REST">REST API</a>.</p>
+<ul>
+<li><p>There are R and Python versions of the package.</p></li>
+<li><p>Perhaps more than any other deployment tool, it is designed to be simple and straightforward.</p></li>
+<li><p>It is also designed to correctly ingest data and make deployment and documentation very easy.</p></li>
+<li><p>vetiver exploits the tools in tidymodels for tracking package dependencies.</p></li>
+</ul>
 </section>
-<section id="create-the-vetiver-version-of-the-model-object" class="slide level2">
-<h2>Create the vetiver version of the model object</h2>
+<section id="convert-the-model-to-vetiver" class="slide level2">
+<h2>Convert the model to vetiver</h2>
+<p>We start by ingesting the model and information about it:</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href=""></a><span class="fu">library</span>(vetiver)</span>
 <span id="cb8-2"><a href=""></a>xgb_vet <span class="ot">&lt;-</span> <span class="fu">vetiver_model</span>(xgb_fit, <span class="at">model_name =</span> <span class="st">"boosted-chicago"</span>)</span>
 <span id="cb8-3"><a href=""></a>xgb_vet</span>
 <span id="cb8-4"><a href=""></a><span class="co">#&gt; </span></span>
 <span id="cb8-5"><a href=""></a><span class="co">#&gt; ── boosted-chicago ─ &lt;bundled_workflow&gt; model for deployment </span></span>
-<span id="cb8-6"><a href=""></a><span class="co">#&gt; A xgboost regression modeling workflow using 6 features</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb8-6"><a href=""></a><span class="co">#&gt; A xgboost regression modeling workflow using 6 features</span></span>
+<span id="cb8-7"><a href=""></a></span>
+<span id="cb8-8"><a href=""></a><span class="co"># Example of stored information: </span></span>
+<span id="cb8-9"><a href=""></a>xgb_vet<span class="sc">$</span>metadata<span class="sc">$</span>required_pkgs</span>
+<span id="cb8-10"><a href=""></a><span class="co">#&gt; [1] "parsnip"   "workflows" "xgboost"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
 <section id="pinning-the-model" class="slide level2">
 <h2>Pinning the model</h2>
+<p>Although vetiver can be used on its own, it works very nicely with the <a href="https://pins.rstudio.com/">pins</a> package.</p>
+<p>This can use many <a href="https://pins.rstudio.com/">cloud storage</a> options and can save, share, and version the model:</p>
+<p><br></p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href=""></a><span class="fu">library</span>(pins)</span>
 <span id="cb9-2"><a href=""></a>model_board <span class="ot">&lt;-</span> <span class="fu">board_temp</span>(<span class="at">versioned =</span> <span class="cn">TRUE</span>)</span>
@@ -375,6 +410,7 @@ Max Kuhn and Emil Hvitfeldt
 </section>
 <section id="model-updating" class="slide level2">
 <h2>Model updating</h2>
+<p>As more data is accrued, we often automate model updates, refitting the same model on the new corpus. We can add the new version to the model board:</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href=""></a>xgb_new_vet <span class="ot">&lt;-</span> </span>
 <span id="cb10-2"><a href=""></a>  <span class="fu">fit</span>(xgb_wflow, chicago_updated) <span class="sc">|&gt;</span> </span>
@@ -385,13 +421,13 @@ Max Kuhn and Emil Hvitfeldt
 <span id="cb10-7"><a href=""></a><span class="co">#&gt; # A tibble: 2 × 3</span></span>
 <span id="cb10-8"><a href=""></a><span class="co">#&gt;   version                created             hash </span></span>
 <span id="cb10-9"><a href=""></a><span class="co">#&gt;   &lt;chr&gt;                  &lt;dttm&gt;              &lt;chr&gt;</span></span>
-<span id="cb10-10"><a href=""></a><span class="co">#&gt; 1 20260201T215351Z-1bf0f 2026-02-01 16:53:51 1bf0f</span></span>
-<span id="cb10-11"><a href=""></a><span class="co">#&gt; 2 20260201T215351Z-fd7c1 2026-02-01 16:53:51 fd7c1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb10-10"><a href=""></a><span class="co">#&gt; 1 20260202T125245Z-01670 2026-02-02 07:52:45 01670</span></span>
+<span id="cb10-11"><a href=""></a><span class="co">#&gt; 2 20260202T125245Z-550e8 2026-02-02 07:52:45 550e8</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
 <section id="reverting-models" class="slide level2">
 <h2>Reverting models</h2>
-<p>Let’s say that the data pull for the last model was wrong and we need to go back a version.</p>
+<p>Suppose the data pull for the last model was incorrect, and we need to revert to an earlier model version.</p>
 <p><br></p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href=""></a>last_best_version <span class="ot">&lt;-</span> </span>
@@ -402,11 +438,14 @@ Max Kuhn and Emil Hvitfeldt
 <span id="cb11-6"><a href=""></a></span>
 <span id="cb11-7"><a href=""></a>model_board <span class="sc">|&gt;</span> </span>
 <span id="cb11-8"><a href=""></a>  <span class="fu">pin_download</span>(<span class="st">"boosted-chicago"</span>, <span class="at">version =</span> last_best_version)</span>
-<span id="cb11-9"><a href=""></a><span class="co">#&gt; [1] "/var/folders/ml/6750yrxn1ds3gsf4d8b6bb600000gn/T/RtmpczjRsD/pins-11be928db7105/boosted-chicago/20260201T215351Z-1bf0f/boosted-chicago.rds"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb11-9"><a href=""></a><span class="co">#&gt; [1] "/var/folders/ml/6750yrxn1ds3gsf4d8b6bb600000gn/T/Rtmpkc0CJq/pins-14a354210b746/boosted-chicago/20260202T125245Z-01670/boosted-chicago.rds"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
+<p><code>pin_version_delete()</code> could remove it too.</p>
 </section>
 <section id="deploying-models" class="slide level2">
 <h2>Deploying models</h2>
+<p>In R, vetiver uses the <a href="https://www.rplumber.io/">plumber</a> package to deploy models:</p>
+<p><br></p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href=""></a><span class="fu">library</span>(plumber)</span>
 <span id="cb12-2"><a href=""></a><span class="fu">vetiver_api</span>(<span class="fu">pr</span>(), xgb_vet)</span>
@@ -497,15 +536,16 @@ ENTRYPOINT ["R", "-e", "pr &lt;- plumber::plumb('/opt/ml/plumber.R'); pr$run(hos
 <section id="monitoring-the-data-and-performance-1" class="slide level2">
 <h2>Monitoring the Data and Performance</h2>
 
-<img data-src="figures/performance-plot-1.svg" class="r-stretch"></section></section>
-<section>
-<section id="data-drifts-models-dont" class="title-slide slide level1 center">
-<h1>Data drifts; models don’t</h1>
+<img data-src="figures/performance-plot-1.svg" class="r-stretch"></section>
+<section id="data-drifts-models-dont" class="slide level2">
+<h2>Data drifts; models don’t</h2>
 <p>There are a few specialized tools to make sure that your prediction population has not shifted:</p>
 <ul>
 <li><p><a href="https://applicable.tidymodels.org/">applicable</a>: statistical tools to measure if your prediction data are extrapolations from your training set. <a href="https://www.youtube.com/watch?v=jQZv31s3v1Y">(video)</a></p></li>
 <li><p><a href="https://rstudio.github.io/pointblank/">pointblank</a>: data validation tools <a href="https://www.youtube.com/watch?v=N9kaAiuAbWo">(video)</a></p></li>
 </ul>
+<p><br></p>
+<p>vetiver also includes an Rmarkdown template for documenting the model and training process called “model cards.”</p>
 </section>
 <section id="other-resources" class="slide level2">
 <h2>Other resources</h2>

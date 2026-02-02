@@ -15,6 +15,7 @@ filters:
 library(tidymodels)
 library(butcher)
 library(bundle)
+theme_set(theme_bw())
 ```
 
 ## Production Aspects for ML
@@ -24,18 +25,9 @@ library(bundle)
 - Infrastructure
 - Post-Deployment
 
+## Example data
 
-
-## Ingesting Data
-
-We often get our data in some markup format (e.g., cvs, json, etc.) that may not have the right context compared to the original training/testing data. 
-
- - How to map categories to indicators.
- - Timezone for dates (compared to the original data)
-
-How does R (and tidymodels) deal with this? 
-
-## Some example data
+Data on [daily ridership](https://bookdown.org/max/FES/chicago-intro.html) on the Chicago "L" trains:
 
 ```{r}
 #| label: chi-data
@@ -56,7 +48,41 @@ chicago_last     <- chi_data |> filter(date  > as.Date("2015-01-01"))
 # 605 rows
 ```
 
+
+## Two example models
+
+Here are two models (a single decision tree and a boosted decision tree) that we'll use: 
+
+<br>
+
+```{r}
+#| label: chicago-trees
+library(tidymodels)
+
+# A CART classification tree
+cart_wflow <- workflow(ridership ~ ., decision_tree(mode = "regression"))
+cart_fit <- fit(cart_wflow, chicago_original)
+
+# An xgboost collection of trees
+xgb_wflow <- workflow(ridership ~ ., boost_tree(mode = "regression"))
+xgb_fit <- fit(xgb_wflow, chicago_original)
+```
+
+
+## Ingesting Data
+
+We often get our data in some markup format (e.g., cvs, json, etc.) that may not have the right context compared to the original training/testing data. 
+
+ - How to map categories to indicators.
+ - Timezone for dates (compared to the original data)
+
+. . .
+
+How does R (and tidymodels) deal with this? 
+
 ## Data Consistency
+
+tidymodels uses a "zero-row slide" of the data to record important aspects of the data:
 
 ```{r}
 #| label: ptype
@@ -64,23 +90,17 @@ ptype <- chicago_original[0,]
 str(ptype)
 ```
 
+<br>
 
-## Simple Example
+It (and vetiver) will ensure that newly ingested data for prediction are encoded the same way and [alert the user otherwise](https://hardhat.tidymodels.org/reference/scream.html).
 
-```{r}
-#| label: chicago-trees
-library(tidymodels)
-
-cart_wflow <- workflow(ridership ~ ., decision_tree(mode = "regression"))
-cart_fit <- fit(cart_wflow, chicago_original)
-```
 
 ## Preparing and saving the model object
 
 There are one or two operations you might want to use on your model object: 
 
- - [`butcher`](https://butcher.tidymodels.org/): remove ancillary data that are not used for prediction. 
- - [`bundle`](https://rstudio.github.io/bundle/): ensure that _all_ of the model data are captured for production. 
+ - [butcher](https://butcher.tidymodels.org/): remove ancillary data that are not used for prediction. 
+ - [bundle](https://rstudio.github.io/bundle/): ensure that _all_ of the model data are captured for production. 
  
 ## Saved Model Size 
 
@@ -112,13 +132,17 @@ cart_fit |> butcher() |> object.size() |> print(units = "Mb")
 
 ## Getting _Everything_ that Defines the Model
 
-There are a few model types that don't follow traditional behaviors, where the model object does not contain everything that the model needs. 
+There are a few model types that don't follow traditional behavior, in that the model object doesn't contain everything the model needs. 
 
 - Examples: xgboost, lightgbm, catboost, bart, tensorflow, and others 
 
+. . .
+
 <br> 
 
-In order to productionize these, we need to keep _all_ of the model data in a single object. 
+. . . 
+
+To productionize these, we need to keep _all_ of the model data in a single object. 
 
 <br> 
 
@@ -126,16 +150,12 @@ That's what the bundle package does.
 
 ## Boosting Example
 
-Here's an example of an xgboost model. It retains the model information in a pointer to external memory:
+Consider our previously fit xgboost model. It retains the model information in a pointer to external memory:
 
 <br>
 
 ```{r}
 #| label: chicago-boost
-library(tidymodels)
-
-xgb_wflow <- workflow(ridership ~ ., boost_tree(mode = "regression"))
-xgb_fit <- fit(xgb_wflow, chicago_original)
 xgb_fit |> extract_fit_engine() |> pluck("ptr")
 ```
 
@@ -144,6 +164,10 @@ xgb_fit |> extract_fit_engine() |> pluck("ptr")
 Using the usual `save()` command won't capture this extra data, so the model won't work outside of this R session. 
 
 ## Bundling
+
+The interface is very simple: 
+
+<br>
 
 ```{r}
 #| label: bundled
@@ -156,24 +180,47 @@ xgb_fit_remade <- unbundle(xgb_bund_fit)
 xgb_fit_remade |> extract_fit_engine() |> pluck("ptr")
 ```
 
+Note that the pointer references a different location in memory than the original object.  
+
+# Model Deployment {background-color="#D04E59FF"}
+
 ## Deploying with SQL
 
 
 ## Versioning and Deploying with vetiver
 
-[`vetiver`](https://vetiver.tidymodels.org/)
+[vetiver](https://vetiver.tidymodels.org/) is a tool for deploying models using the well-known [REST API](https://en.wikipedia.org/wiki/REST). 
 
-## Create the vetiver version of the model object
+- There are R and Python versions of the package. 
+
+- Perhaps more than any other deployment tool, it is designed to be simple and straightforward. 
+
+- It is also designed to correctly ingest data and make deployment and documentation very easy. 
+
+- vetiver exploits the tools in tidymodels for tracking package dependencies. 
+
+## Convert the model to vetiver
+
+We start by ingesting the model and information about it:
 
 ```{r}
 #| label: make-vetiver-model
 library(vetiver)
 xgb_vet <- vetiver_model(xgb_fit, model_name = "boosted-chicago")
 xgb_vet
+
+# Example of stored information: 
+xgb_vet$metadata$required_pkgs
 ```
 
 
 ## Pinning the model
+
+Although vetiver can be used on its own, it works very nicely with the [pins](https://pins.rstudio.com/) package. 
+
+This can use many [cloud storage](https://pins.rstudio.com/) options and can save, share, and version the model:
+
+<br>
 
 ```{r}
 #| label: pin
@@ -185,6 +232,8 @@ model_board |> vetiver_pin_write(xgb_vet)
 
 
 ## Model updating
+
+As more data is accrued, we often automate model updates, refitting the same model on the new corpus. We can add the new version to the model board: 
 
 ```{r}
 #| label: boost-update
@@ -198,7 +247,7 @@ model_board |> pin_versions("boosted-chicago")
 
 ## Reverting models
 
-Let's say that the data pull for the last model was wrong and we need to go back a version.
+Suppose the data pull for the last model was incorrect, and we need to revert to an earlier model version.
 
 <br> 
 
@@ -214,7 +263,13 @@ model_board |>
   pin_download("boosted-chicago", version = last_best_version)
 ```
 
+`pin_version_delete()` could remove it too. 
+
 ## Deploying models
+
+In R, vetiver uses the [plumber](https://www.rplumber.io/) package to deploy models: 
+
+<br> 
 
 ```{r}
 #| label: boost-deploy
@@ -306,13 +361,17 @@ xgb_fit |>
   geom_smooth()
 ```
 
-# Data drifts; models don't
+## Data drifts; models don't
 
 There are a few specialized tools to make sure that your prediction population has not shifted: 
 
 - [applicable](https://applicable.tidymodels.org/): statistical tools to measure if your prediction data are extrapolations from your training set. [(video)](https://www.youtube.com/watch?v=jQZv31s3v1Y)
 
 - [pointblank](https://rstudio.github.io/pointblank/): data validation tools [(video)](https://www.youtube.com/watch?v=N9kaAiuAbWo)
+
+<br>
+
+vetiver also includes an Rmarkdown template for documenting the model and training process called "model cards."
 
 ## Other resources
 
