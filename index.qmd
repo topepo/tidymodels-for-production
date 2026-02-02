@@ -1,0 +1,324 @@
+---
+title: "tidymodels for Production"
+author: "Max Kuhn and Emil Hvitfeldt"
+institute: "Posit PBC"
+filters:
+  - include-code-files
+---
+
+# Sides + sources on github: <br> `topepo/tidymodels-for-production`  {background-color="#B25D91FF"}
+
+```{r}
+#| label: pkgs
+#| results: hide
+#| echo: false
+library(tidymodels)
+library(butcher)
+library(bundle)
+```
+
+## Production Aspects for ML
+
+- The Data
+- The Model
+- Infrastructure
+- Post-Deployment
+
+
+
+## Ingesting Data
+
+We often get our data in some markup format (e.g., cvs, json, etc.) that may not have the right context compared to the original training/testing data. 
+
+ - How to map categories to indicators.
+ - Timezone for dates (compared to the original data)
+
+How does R (and tidymodels) deal with this? 
+
+## Some example data
+
+```{r}
+#| label: chi-data
+library(lubridate)
+
+chi_data <- 
+  Chicago |> 
+  mutate(day = wday(date, label = TRUE)) |> 
+  select(ridership, date, day, Clark_Lake:Irving_Park)
+
+chicago_original <- chi_data |> filter(date <= as.Date("2014-01-01"))
+# 4,718 rows
+
+chicago_updated  <- chi_data |> filter(date <= as.Date("2015-01-01")) 
+# 5,093 rows
+
+chicago_last     <- chi_data |> filter(date  > as.Date("2015-01-01")) 
+# 605 rows
+```
+
+## Data Consistency
+
+```{r}
+#| label: ptype
+ptype <- chicago_original[0,]
+str(ptype)
+```
+
+
+## Simple Example
+
+```{r}
+#| label: chicago-trees
+library(tidymodels)
+
+cart_wflow <- workflow(ridership ~ ., decision_tree(mode = "regression"))
+cart_fit <- fit(cart_wflow, chicago_original)
+```
+
+## Preparing and saving the model object
+
+There are one or two operations you might want to use on your model object: 
+
+ - [`butcher`](https://butcher.tidymodels.org/): remove ancillary data that are not used for prediction. 
+ - [`bundle`](https://rstudio.github.io/bundle/): ensure that _all_ of the model data are captured for production. 
+ 
+## Saved Model Size 
+
+```{r}
+#| label: cart-size
+#| error: true
+# How much space does the model take?
+lobstr::obj_size(cart_fit)
+```
+
+Also, `butcher::weigh(cart_fit)` will tell you how much space each element of the model will consume.
+
+## Trimming the model
+
+The ` butcher` package can be used to remove anything that isn't needed for prediction. 
+
+<br>
+
+```{r}
+#| label: cart-trim
+
+library(butcher)
+# Before: 
+cart_fit |> object.size() |> print(units = "Mb")
+
+# After
+cart_fit |> butcher() |> object.size() |> print(units = "Mb")
+```
+
+## Getting _Everything_ that Defines the Model
+
+There are a few model types that don't follow traditional behaviors, where the model object does not contain everything that the model needs. 
+
+- Examples: xgboost, lightgbm, catboost, bart, tensorflow, and others 
+
+<br> 
+
+In order to productionize these, we need to keep _all_ of the model data in a single object. 
+
+<br> 
+
+That's what the bundle package does. 
+
+## Boosting Example
+
+Here's an example of an xgboost model. It retains the model information in a pointer to external memory:
+
+<br>
+
+```{r}
+#| label: chicago-boost
+library(tidymodels)
+
+xgb_wflow <- workflow(ridership ~ ., boost_tree(mode = "regression"))
+xgb_fit <- fit(xgb_wflow, chicago_original)
+xgb_fit |> extract_fit_engine() |> pluck("ptr")
+```
+
+<br>
+
+Using the usual `save()` command won't capture this extra data, so the model won't work outside of this R session. 
+
+## Bundling
+
+```{r}
+#| label: bundled
+library(bundle)
+
+xgb_bund_fit <- bundle(xgb_fit)
+xgb_bund_fit
+
+xgb_fit_remade <- unbundle(xgb_bund_fit)
+xgb_fit_remade |> extract_fit_engine() |> pluck("ptr")
+```
+
+## Deploying with SQL
+
+
+## Versioning and Deploying with vetiver
+
+[`vetiver`](https://vetiver.tidymodels.org/)
+
+## Create the vetiver version of the model object
+
+```{r}
+#| label: make-vetiver-model
+library(vetiver)
+xgb_vet <- vetiver_model(xgb_fit, model_name = "boosted-chicago")
+xgb_vet
+```
+
+
+## Pinning the model
+
+```{r}
+#| label: pin
+
+library(pins)
+model_board <- board_temp(versioned = TRUE)
+model_board |> vetiver_pin_write(xgb_vet)
+```
+
+
+## Model updating
+
+```{r}
+#| label: boost-update
+xgb_new_vet <- 
+  fit(xgb_wflow, chicago_updated) |> 
+  vetiver_model(model_name = "boosted-chicago")
+
+model_board |> vetiver_pin_write(xgb_new_vet)
+model_board |> pin_versions("boosted-chicago")
+```
+
+## Reverting models
+
+Let's say that the data pull for the last model was wrong and we need to go back a version.
+
+<br> 
+
+```{r}
+#| label: revert-model
+last_best_version <- 
+  model_board |> 
+  pin_versions("boosted-chicago") |> 
+  slice(1) |> 
+  pluck("version")
+
+model_board |> 
+  pin_download("boosted-chicago", version = last_best_version)
+```
+
+## Deploying models
+
+```{r}
+#| label: boost-deploy
+
+library(plumber)
+vetiver_api(pr(), xgb_vet)
+```
+
+## Plumber deployment file
+
+`vetiver_write_plumber(model_board, "boosted-chicago")` will write out a template for using plumber to deploy: 
+
+<br> 
+
+```r 
+{{< include plumber.R >}}
+```
+
+## Docker deployment file
+
+`vetiver_write_docker(xgb_vet)` will write out a Docker template:
+
+<br> 
+
+```
+# Generated by the vetiver package; edit with care
+
+FROM rocker/r-ver:4.5.2
+ENV RENV_CONFIG_REPOS_OVERRIDE https://packagemanager.rstudio.com/cran/latest
+
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+  libcurl4-openssl-dev \
+  libicu-dev \
+  libsodium-dev \
+  libssl-dev \
+  libx11-dev \
+  make \
+  zlib1g-dev \
+  && apt-get clean
+
+COPY vetiver_renv.lock renv.lock
+RUN Rscript -e "install.packages('renv')"
+RUN Rscript -e "renv::restore()"
+COPY plumber.R /opt/ml/plumber.R
+EXPOSE 8000
+ENTRYPOINT ["R", "-e", "pr <- plumber::plumb('/opt/ml/plumber.R'); pr$run(host = '0.0.0.0', port = 8000)"]
+```
+
+
+## Monitoring the Data and Performance
+
+tidymodels has basic tools to compute weekly performance: 
+
+```{r}
+#| label: performance
+#| eval: false
+xgb_fit |> 
+  augment(chicago_last) |> 
+  sliding_period(
+    date, period = "week",
+    lookback = 0, assess_stop = 1) |> 
+  mutate(
+    weekly = map(splits, analysis),
+    Error = map_dbl(weekly, ~ rmse(.x, ridership, .pred)$.estimate),
+    Date = map_vec(weekly, ~ .x |> pluck("date") |> min())
+  ) |> 
+  ggplot(aes(Date, Error)) + 
+  geom_point() + 
+  geom_smooth()
+```
+
+## Monitoring the Data and Performance
+
+```{r}
+#| label: performance-plot
+#| echo: false
+xgb_fit |> 
+  augment(chicago_last) |> 
+  sliding_period(
+    date, period = "week",
+    lookback = 0, assess_stop = 1) |> 
+  mutate(
+    weekly = map(splits, analysis),
+    Error = map_dbl(weekly, ~ rmse(.x, ridership, .pred)$.estimate),
+    Date = map_vec(weekly, ~ .x |> pluck("date") |> min())
+  ) |> 
+  ggplot(aes(Date, Error)) + 
+  geom_point() + 
+  geom_smooth()
+```
+
+# Data drifts; models don't
+
+There are a few specialized tools to make sure that your prediction population has not shifted: 
+
+- [applicable](https://applicable.tidymodels.org/): statistical tools to measure if your prediction data are extrapolations from your training set. [(video)](https://www.youtube.com/watch?v=jQZv31s3v1Y)
+
+- [pointblank](https://rstudio.github.io/pointblank/): data validation tools [(video)](https://www.youtube.com/watch?v=N9kaAiuAbWo)
+
+## Other resources
+
+ - [_MLOps with R: The Whole Game of End-to-End Data Science & Model Deployment_](https://www.youtube.com/watch?v=J32pRt1nuoY)
+ - [_MLOps with vetiver in Python and R_](https://www.youtube.com/watch?v=oFQANK13-k4)
+ - [_Demystifying MLOps_](https://www.youtube.com/watch?v=hzrFU5-_9-E)
+
+
+# Thanks for listening! {background-color="#FAE093FF"}
