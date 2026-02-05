@@ -45,7 +45,7 @@ chicago_updated  <- chi_data |> filter(date <= as.Date("2015-01-01"))
 # 5,093 rows
 
 chicago_last     <- chi_data |> filter(date  > as.Date("2015-01-01")) 
-# 605 rows
+#   605 rows
 ```
 
 
@@ -108,16 +108,21 @@ There are one or two operations you might want to use on your model object:
  
 ## Saved Model Size 
 
+<br> 
+
 ```{r}
 #| label: cart-size
 #| error: true
 # How much space does the model take?
-lobstr::obj_size(cart_fit)
+cart_fit |> object.size() |> print(units = "MB")
 ```
+
+<br> 
+
 
 Also, `butcher::weigh(cart_fit)` will tell you how much space each element of the model will consume.
 
-. . .
+## What takes up the most space? 
 
 ```{r}
 #| label: botcher-weigh
@@ -198,15 +203,23 @@ Note that the pointer references a different location in memory than the origina
 
 Some model types (linear models, trees) can efficiently be turned into SQL expressions. This allows us to take a fitted model and have it predict directly in a database.
 
+<br> 
+
 Simiarly this can be done with feature engineering and postprocessing too.
 
+<br> 
+
 The [orbital](https://orbital.tidymodels.org/) package interfaces directly with tidymodels workflows.
+
 
 ## Using orbital
 
 Apply `orbital()` to a fitted workflow. 
 
 (`tree` and `tree_depth` are set low for easy viewing on slides)
+
+<br> 
+
 
 ```{r}
 #| label: orbital-setup
@@ -225,7 +238,12 @@ xgb_orb <- orbital(xgb_rec_fit)
 
 ## Orbital objects
 
+<br> 
+
 The orbital object only contains the sufficient calculations needed to perform predictions.
+
+<br> 
+
 
 ```{r}
 #| label: orbital-object
