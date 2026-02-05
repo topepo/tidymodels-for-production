@@ -6,7 +6,7 @@ filters:
   - include-code-files
 ---
 
-# Sides + sources on github: <br> `topepo/tidymodels-for-production`  {background-color="#B25D91FF"}
+# Slides + sources on github: <br> `topepo/tidymodels-for-production`  {background-color="#B25D91FF"}
 
 ```{r}
 #| label: pkgs
