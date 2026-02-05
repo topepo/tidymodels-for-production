@@ -35,7 +35,7 @@ library(lubridate)
 
 chi_data <- 
   Chicago |> 
-  mutate(day = wday(date, label = TRUE)) |> 
+  mutate(day = wday(date, label = TRUE)) |>
   select(ridership, date, day, Clark_Lake:Irving_Park)
 
 chicago_original <- chi_data |> filter(date <= as.Date("2014-01-01"))
@@ -196,6 +196,87 @@ Note that the pointer references a different location in memory than the origina
 
 ## Deploying with SQL
 
+Some model types (linear models, trees) can efficiently be turned into SQL expressions. This allows us to take a fitted model and have it predict directly in a database.
+
+Simiarly this can be done with feature engineering and postprocessing too.
+
+The [orbital](https://orbital.tidymodels.org/) package interfaces directly with tidymodels workflows.
+
+## Using orbital
+
+Apply `orbital()` to a fitted workflow. 
+
+(`tree` and `tree_depth` are set low for easy viewing on slides)
+
+```{r}
+#| label: orbital-setup
+rec_spec <- recipe(ridership ~ ., data = chicago_original) |>
+  step_rm(date, day) |>
+  step_normalize(all_numeric_predictors())
+
+stump_spec <- boost_tree(mode = "regression", trees = 5, tree_depth = 2)
+
+xgb_rec_wflow <- workflow(rec_spec, stump_spec)
+xgb_rec_fit <- fit(xgb_rec_wflow, chicago_original)
+
+library(orbital)
+xgb_orb <- orbital(xgb_rec_fit)
+```
+
+## Orbital objects
+
+The orbital object only contains the sufficient calculations needed to perform predictions.
+
+```{r}
+#| label: orbital-object
+#| message: true
+xgb_orb
+```
+
+## Predicting with orbital objects
+
+::: {.columns}
+::: {.column}
+
+```{r}
+#| label: orbital-predict
+predict(xgb_orb, chicago_original)
+```
+
+:::
+::: {.column}
+
+```{r}
+#| label: workflow-predict
+predict(xgb_rec_fit, chicago_original)
+```
+
+:::
+:::
+
+## Predicting in databases
+
+If you have a connection to a database with the data in the correct format, then you can predict on it directly.
+
+```{r}
+#| label: database-predict
+library(DBI)
+library(RSQLite)
+
+con <- dbConnect(SQLite(), path = ":memory:")
+chicago_original_sqlite <- copy_to(con, chicago_original)
+
+predict(xgb_orb, chicago_original_sqlite)
+```
+
+## Generating SQL
+
+using `show_query()` or `orbital_sql()` will generate the SQL.
+
+```{r}
+#| label: show-query
+show_query(xgb_orb, con)
+```
 
 ## Versioning and Deploying with vetiver
 
